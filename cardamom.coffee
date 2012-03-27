@@ -36,15 +36,18 @@ class Cardamom
         else
           callback?(err)
 
-  _readFileTask: (rdir, filename, data) ->
-    filename = path.join @path, rdir, filename
-    task = name: 'read', ƒ: (callback) ->
-      fs.readFile filename, (err, data) =>
+  _readFileTask: (filename) =>
+    task = name: 'read', ƒ: (callback) =>
+      fs.readFile filename, 'utf8', (err, data) =>
         if not err
-          @emitter.emit 'log', "Read file: #{filename}"
+          @emitter.emit 'logv', "Read file: #{filename}"
           callback?(null, data)
         else 
           callback?(err)
+
+  _rreadFileTask: (rdir, filename) =>
+    filename = path.join @path, rdir, filename
+    @_readFileTask filename, data
 
   _mkdirTask: (rdir) =>
     targetDir = path.join @path, rdir
@@ -70,7 +73,7 @@ class Cardamom
     @queue.push @_writeFileTask(relativeDir, filename, data), callback
 
   read: (relativeDir, filename, callback) ->
-    @queue.push @_readFileTask(relativeDir, filename), callback
+    @queue.push @_rreadFileTask(relativeDir, filename), callback
 
   link: (firstRelDir, firstFileName, secondRelDir, secondFileName, linkName = '', callback) ->
     if typeof linkName is 'function'
@@ -95,5 +98,61 @@ class Cardamom
 
     @queue.push task, callback
 
+  findLinks: (relativeDir, filename, linkName, linkedRelDir, callback) ->
+    if typeof linkName is 'function'
+      callback = linkName
+      linkName = undefined
+    else if typeof linkedRelDir is 'function'
+      callback = linkedRelDir
+      linkedRelDir = undefined
+
+    linkName = linkName or @opts.linkName
+
+    targetLinkDir = path.join @path, relativeDir, @opts.refsDirName, filename, linkName
+    if linkedRelDir
+      targetLinkDir = path.join targetLinkDir, linkedRelDir 
+
+    task = name: 'readdir', ƒ: (callback) ->
+      doReadDir = (dir, callback) ->
+        fs.readdir dir, (err, files) ->
+          if err
+            callback?(err)
+          else
+            callback?(null, _.map files, (file) -> path.join dir, file)
+      
+      if linkedRelDir
+        doReadDir targetLinkDir, callback
+      else
+        doReadDir targetLinkDir, (err, dirs) ->
+          return callback?(err) if err
+          # If there's lots of linked tables, this won't go well.
+          # mapSeries is much slower, but won't have a problem with lots of tables.
+          async.map dirs, doReadDir, (err, files) ->
+            return callback?(err) if err
+            callback?(null, _.flatten files)
+
+    @queue.push task, callback
+
+  readLinks: (relativeDir, filename, linkName, linkedRelDir, callback) =>
+    if typeof linkName is 'function'
+      callback = linkName
+      linkName = undefined
+    else if typeof linkedRelDir is 'function'
+      callback = linkedRelDir
+      linkedRelDir = undefined
+
+    linkName = linkName or @opts.linkName
+
+    @findLinks relativeDir, filename, linkName, linkedRelDir, (err, files) =>
+      return callback?(err) if err
+
+      readFile = (file, callback) => @queue.push @_readFileTask(file), callback
+
+      # OK, perhaps streaming would be nice here...
+      async.mapSeries files, readFile, (err, data) ->
+        return callback?(err) if err
+        result = {}
+        result[ files[i] ] = data[i] for i of files
+        callback?(null, result)
 
 module.exports = Cardamom
