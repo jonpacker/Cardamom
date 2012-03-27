@@ -5,19 +5,24 @@ Emitter = require('events').EventEmitter
 
 class Cardamom
   constructor: (@path, concurrencyLimit = 2) ->
-    @queue = async.queue @_process, concurrencyLimit
+    @queue = async.queue @_processTask, concurrencyLimit
     @emitter = new Emitter
+    @taskCount = 0
+
+  _processTask: (task, callback) => 
+    @emitter.emit 'log', "Processing new task #{++@taskCount}"
+    task(callback)
 
   _writeFileTask: (rdir, filename, data) ->
     basePath = path.join @path, rdir
     filename = path.join basePath, filename
-    task = (callback) ->
-      fs.writeFile filename, data, (err) ->
+    task = (callback) =>
+      fs.writeFile filename, data, (err) =>
         if not err
           @emitter.emit 'log', "Created file: #{filename}"
           callback?()
-        if err.code is 'ENOENT'
-          fs.mkdir basePath, (err) ->
+        else if err.code is 'ENOENT'
+          fs.mkdir basePath, (err) =>
             if not err
               @emitter.emit 'log', "Created directory: #{basePath}"
               task callback
@@ -29,7 +34,7 @@ class Cardamom
   _readFileTask: (rdir, filename, data) ->
     filename = path.join @path, rdir, filename
     task = (callback) ->
-      fs.readFile filename, (err, data) ->
+      fs.readFile filename, (err, data) =>
         if not err
           @emitter.emit 'log', "Read file: #{filename}"
           callback?(null, data)
@@ -45,3 +50,4 @@ class Cardamom
   read: (relativeDir, filename, callback) ->
     @queue.push @_readFileTask(relativeDir, filename), callback
 
+module.exports = Cardamom
