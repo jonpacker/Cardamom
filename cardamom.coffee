@@ -72,17 +72,12 @@ class Cardamom
   read: (relativeDir, filename, callback) ->
     @queue.push @_readFileTask(relativeDir, filename), callback
 
-  #linkMeta does nothing as yet. TODO.
-  link: (firstRelDir, firstFileName, secondRelDir, secondFileName, linkName = '', linkMeta = '', callback) ->
+  link: (firstRelDir, firstFileName, secondRelDir, secondFileName, linkName = '', callback) ->
     if typeof linkName is 'function'
       callback = linkName
       linkName = undefined
-    if typeof linkMeta is 'function'
-      callback = linkMeta
-      linkMeta = undefined
 
     linkName = linkName or @opts.linkName
-    linkMeta = linkMeta or ''
 
     targets = [ path.join(firstRelDir, firstFileName), path.join(secondRelDir, secondFileName) ]
     links = [ path.join(secondRelDir, @opts.refsDirName, secondFileName, linkName, firstRelDir, firstFileName), 
