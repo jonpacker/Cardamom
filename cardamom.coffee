@@ -2,6 +2,7 @@ fs = require 'fs'
 async = require 'async'
 path = require 'path'
 Emitter = require('events').EventEmitter
+exec = require('child_process').exec
 _ = require 'underscore'
 
 class Cardamom
@@ -24,17 +25,22 @@ class Cardamom
     filename = path.join basePath, filename
     task = name: 'write', ƒ: (callback) =>
       @emitter.emit 'logv', "Creating file: #{filename}"
-      fs.writeFile filename, data, (err) =>
+      exec '/bin/mktemp', (err, tempname, stderr) =>
         if not err
-          callback?()
-        else if err.code is 'ENOENT'
-          @_mkdir rdir, (err) =>
+          fs.writeFile tempname, data, (err) =>
             if not err
-              task.ƒ callback
+              fs.renameSync(tempname, filename)
+              callback?()
+            else if err.code is 'ENOENT'
+              @_mkdir rdir, (err) =>
+                if not err
+                  task.ƒ callback
+                else
+                  callback?(err)
             else
               callback?(err)
         else
-          callback?(err)
+          callback?("Could not create tempfile: " + err)
 
   _readFileTask: (filename) =>
     task = name: 'read', ƒ: (callback) =>
