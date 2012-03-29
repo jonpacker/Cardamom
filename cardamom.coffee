@@ -52,7 +52,7 @@ class Cardamom
   _mkdirTask: (rdir) =>
     targetDir = path.join @path, rdir
     task = name: 'mkdir', ƒ: (callback) =>
-      fs.mkdir targetDir, (err) =>
+      fs.mkdir targetDir, 0777, (err) =>
         if not err or err.code is 'EEXIST'
           @emitter.emit 'logv', "Created directory #{targetDir}"
           callback?()
